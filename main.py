@@ -4,16 +4,32 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import mean_squared_error, accuracy_score
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for Windows
 import matplotlib.pyplot as plt
+import os
+import warnings
+warnings.filterwarnings('ignore')  # Suppress warnings for cleaner output
+
+# Get absolute path for file operations
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def run_analysis():
     # 1. Load the Datasets
     try:
-        us_hist = pd.read_csv('Global_Tech_Historical_US_Market_20260206_045434.csv')
-        leaders = pd.read_csv('Global_Tech_Leaders_Stock_Dataset_20260206_045419.csv')
+        us_hist = pd.read_csv(os.path.join(BASE_DIR, 'Global_Tech_Historical_US_Market_20260206_045434.csv'))
+        leaders = pd.read_csv(os.path.join(BASE_DIR, 'Global_Tech_Leaders_Stock_Dataset_20260206_045419.csv'))
         print("Datasets loaded successfully.")
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        print(f"Error: File not found - {e}")
+        print("Make sure all CSV files are in the same directory as main.py")
+        return
+    except PermissionError as e:
+        print(f"Error: Permission denied - {e}")
+        print("Please check file permissions and try running as administrator")
+        return
+    except Exception as e:
+        print(f"Error loading datasets: {e}")
         return
 
     # --- PART 1: Regression (Predicting Stock Price) ---
@@ -47,6 +63,26 @@ def run_analysis():
     y_pred_r = regressor.predict(X_test_r)
     rmse = np.sqrt(mean_squared_error(y_test_r, y_pred_r))
     print(f"ASML Stock Price Prediction RMSE: ${rmse:.2f}")
+
+    # Plot actual vs predicted for the test period (uses matplotlib)
+    try:
+        dates_test = asml_data['Date'].iloc[split_idx:]
+        plt.figure(figsize=(10, 5))
+        plt.plot(dates_test, y_test_r.values, label='Actual Close')
+        plt.plot(dates_test, y_pred_r, label='Predicted Close')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.title('ASML Actual vs Predicted Close Price')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(BASE_DIR, 'asml_actual_vs_predicted.png'))
+        plt.close()
+        print("Saved plot to 'asml_actual_vs_predicted.png'.")
+    except PermissionError as e:
+        print(f"Warning: Permission denied saving plot - {e}")
+    except Exception as e:
+        # plotting is optional; don't fail the whole run if it errors
+        print(f"Warning: Could not save plot - {e}")
 
     # --- PART 2: Classification (Predicting Performance Categories) ---
     # We will use financial metrics to predict the '5Y_Performance_Category_US'.
@@ -85,10 +121,16 @@ def run_analysis():
     print(f"Performance Category Classification Accuracy: {acc * 100:.2f}%")
 
     # Export a summary of processed data
-    asml_data['Predicted_Close'] = np.nan
-    asml_data.iloc[split_idx:, asml_data.columns.get_loc('Predicted_Close')] = y_pred_r
-    asml_data.to_csv('asml_predictions.csv', index=False)
-    print("\nProcessing complete. Predictions saved to 'asml_predictions.csv'.")
+    try:
+        asml_data['Predicted_Close'] = np.nan
+        asml_data.iloc[split_idx:, asml_data.columns.get_loc('Predicted_Close')] = y_pred_r
+        asml_data.to_csv(os.path.join(BASE_DIR, 'asml_predictions.csv'), index=False)
+        print("\nProcessing complete. Predictions saved to 'asml_predictions.csv'.")
+    except PermissionError as e:
+        print(f"Error: Permission denied saving CSV - {e}")
+        print("Please check file permissions and try running as administrator")
+    except Exception as e:
+        print(f"Error saving predictions: {e}")
 
 if __name__ == "__main__":
     run_analysis()
